@@ -134,8 +134,6 @@ export default function Product() {
     selectedVariant?.compareAtPrice?.amount &&
     selectedVariant?.price?.amount < selectedVariant?.compareAtPrice?.amount;
 
-  console.log(variants.nodes);
-
   const {uniqueOptions} = useCreateOptions(variants.nodes);
 
   return (
