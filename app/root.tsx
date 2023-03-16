@@ -23,14 +23,13 @@ import {
 import {Layout} from '~/components';
 import {GenericError} from './components/GenericError';
 import {NotFound} from './components/NotFound';
-
 import styles from './styles/app.css';
 import favicon from '../public/favicon.svg';
-
 import {DEFAULT_LOCALE, parseMenu, type EnhancedMenu} from './lib/utils';
 import invariant from 'tiny-invariant';
 import {Shop, Cart} from '@shopify/hydrogen/storefront-api-types';
 import {useAnalytics} from './hooks/useAnalytics';
+import {SliderIdContextProvider} from './context/SliderIdContext';
 
 const seo: SeoHandleFunction<typeof loader> = ({data, pathname}) => ({
   title: data?.layout?.shop?.name,
@@ -56,6 +55,10 @@ export const links: LinksFunction = () => {
       href: 'https://shop.app',
     },
     {rel: 'icon', type: 'image/svg+xml', href: favicon},
+    {
+      rel: 'stylesheet',
+      href: 'https://unpkg.com/swiper@7/swiper-bundle.min.css',
+    },
   ];
 };
 
@@ -89,23 +92,25 @@ export default function App() {
   useAnalytics(hasUserConsent, locale);
 
   return (
-    <html lang={locale.language}>
-      <head>
-        <Seo />
-        <Meta />
-        <Links />
-      </head>
-      <body>
-        <Layout
-          layout={data.layout as LayoutData}
-          key={`${locale.language}-${locale.country}`}
-        >
-          <Outlet />
-        </Layout>
-        <ScrollRestoration />
-        <Scripts />
-      </body>
-    </html>
+    <SliderIdContextProvider>
+      <html lang={locale.language}>
+        <head>
+          <Seo />
+          <Meta />
+          <Links />
+        </head>
+        <body>
+          <Layout
+            layout={data.layout as LayoutData}
+            key={`${locale.language}-${locale.country}`}
+          >
+            <Outlet />
+          </Layout>
+          <ScrollRestoration />
+          <Scripts />
+        </body>
+      </html>
+    </SliderIdContextProvider>
   );
 }
 

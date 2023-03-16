@@ -1,114 +1,77 @@
-import type {MediaEdge} from '@shopify/hydrogen/storefront-api-types';
-import {ATTR_LOADING_EAGER} from '~/lib/const';
-import type {MediaImage} from '@shopify/hydrogen/storefront-api-types';
+import {CSSProperties, useEffect, useRef, useState} from 'react';
+import {FreeMode, Navigation, Thumbs} from 'swiper';
+import {Swiper, SwiperSlide} from 'swiper/react';
+import {useSliderIdContext} from '~/context/SliderIdContext';
+import {IOption} from '~/types/types';
 
-/**
- * A client component that defines a media gallery for hosting images, 3D models, and videos of products
- */
 export function ProductGallery({
   media,
-  className,
 }: {
-  media: MediaEdge['node'][];
+  media: IOption[];
   className?: string;
 }) {
+  const [thumbsSwiper, setThumbsSwiper] = useState(null);
+  const {sliderId} = useSliderIdContext();
+  const sliderRef = useRef() as any;
+
   if (!media.length) {
     return null;
   }
 
+  const paginationStyle = {
+    '--swiper-navigation-color': '#000',
+    '--swiper-pagination-color': '#000',
+    marginBottom: '30px',
+  };
+
+  useEffect(() => {
+    if (sliderRef.current) {
+      sliderRef.current.swiper.slideTo(sliderId);
+    }
+  }, [sliderId]);
+
   return (
-    <div
-      className={`swimlane md:grid-flow-row hiddenScroll md:p-0 md:overflow-x-auto md:grid-cols-2 ${className}`}
-    >
-      {media.map((med, i) => {
-        let mediaProps: Record<string, any> = {};
-        const isFirst = i === 0;
-        const isFourth = i === 3;
-        const isFullWidth = i % 3 === 0;
-
-        const data = {
-          ...med,
-          image: {
-            // @ts-ignore
-            ...med.image,
-            altText: med.alt || 'Product image',
-          },
-        } as MediaImage;
-
-        switch (med.mediaContentType) {
-          case 'IMAGE':
-            mediaProps = {
-              width: 800,
-              widths: [400, 800, 1200, 1600, 2000, 2400],
-            };
-            break;
-          case 'VIDEO':
-            mediaProps = {
-              width: '100%',
-              autoPlay: true,
-              controls: false,
-              muted: true,
-              loop: true,
-              preload: 'auto',
-            };
-            break;
-          case 'EXTERNAL_VIDEO':
-            mediaProps = {width: '100%'};
-            break;
-          case 'MODEL_3D':
-            mediaProps = {
-              width: '100%',
-              interactionPromptThreshold: '0',
-              ar: true,
-              loading: ATTR_LOADING_EAGER,
-              disableZoom: true,
-            };
-            break;
-        }
-
-        if (i === 0 && med.mediaContentType === 'IMAGE') {
-          mediaProps.loading = ATTR_LOADING_EAGER;
-        }
-
-        const style = [
-          isFullWidth ? 'md:col-span-2' : 'md:col-span-1',
-          isFirst || isFourth ? '' : 'md:aspect-[4/5]',
-          'aspect-square snap-center card-image bg-white dark:bg-contrast/10 w-mobileGallery md:w-full',
-        ].join(' ');
-
-        return (
-          <div
-            className={style}
-            // @ts-ignore
-            key={med.id || med.image.id}
-          >
-            {/* TODO: Replace with MediaFile when it's available */}
-            {(med as MediaImage).image && (
-              <img
-                src={data.image!.url}
-                alt={data.image!.altText!}
-                className="w-full h-full aspect-square fadeIn object-cover"
-              />
-            )}
-            {/* <MediaFile
-              tabIndex="0"
-              className={`w-full h-full aspect-square fadeIn object-cover`}
-              data={data}
-              sizes={
-                isFullWidth
-                  ? '(min-width: 64em) 60vw, (min-width: 48em) 50vw, 90vw'
-                  : '(min-width: 64em) 30vw, (min-width: 48em) 25vw, 90vw'
-              }
-              // @ts-ignore
-              options={{
-                crop: 'center',
-                scale: 2,
-              }}
-              {...mediaProps}
-            /> */}
-          </div>
-        );
-      })}
+    <div>
+      <Swiper
+        ref={sliderRef}
+        style={paginationStyle as CSSProperties}
+        spaceBetween={30}
+        slidesPerView={1}
+        navigation={true}
+        thumbs={{swiper: thumbsSwiper}}
+        modules={[FreeMode, Navigation, Thumbs]}
+        className="mySwiper2"
+      >
+        {media.map((item) => (
+          <SwiperSlide key={item.index}>
+            <img
+              src={item.image}
+              alt={item.option}
+              className="w-full h-full aspect-square fadeIn object-cover "
+            />
+          </SwiperSlide>
+        ))}
+      </Swiper>
+      <Swiper
+        // @ts-ignore
+        onSwiper={setThumbsSwiper}
+        spaceBetween={10}
+        slidesPerView={3}
+        freeMode={true}
+        watchSlidesProgress={true}
+        modules={[FreeMode, Navigation, Thumbs]}
+        className="mySwiper  swiper-wrapper"
+      >
+        {media.map((item) => (
+          <SwiperSlide key={item.index}>
+            <img
+              src={item.image}
+              alt={item.option}
+              className="w-full h-full aspect-square fadeIn object-cover "
+            />
+          </SwiperSlide>
+        ))}
+      </Swiper>
     </div>
   );
 }

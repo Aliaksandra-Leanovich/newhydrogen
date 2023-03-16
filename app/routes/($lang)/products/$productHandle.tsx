@@ -1,51 +1,50 @@
-import {type ReactNode, useRef, Suspense, useMemo} from 'react';
-import {Disclosure, Listbox} from '@headlessui/react';
-import {defer, type LoaderArgs} from '@shopify/remix-oxygen';
+import {Disclosure} from '@headlessui/react';
 import {
-  useLoaderData,
   Await,
+  useLoaderData,
   useSearchParams,
-  useLocation,
   useTransition,
 } from '@remix-run/react';
 import {
   AnalyticsPageType,
+  flattenConnection,
   Money,
   ShopifyAnalyticsProduct,
-  ShopPayButton,
-  parseMetafield,
-  flattenConnection,
-  type SeoHandleFunction,
   type SeoConfig,
+  type SeoHandleFunction,
 } from '@shopify/hydrogen';
+import type {
+  MediaConnection,
+  MediaImage,
+  Product as ProductType,
+  ProductConnection,
+  ProductVariant,
+  SelectedOptionInput,
+  Shop,
+} from '@shopify/hydrogen/storefront-api-types';
+import {defer, type LoaderArgs} from '@shopify/remix-oxygen';
+import clsx from 'clsx';
+import {Suspense, useMemo} from 'react';
+import type {Product} from 'schema-dts';
+import invariant from 'tiny-invariant';
 import {
+  AddToCartButton,
   Heading,
-  IconCaret,
-  IconCheck,
   IconClose,
+  Link,
   ProductGallery,
   ProductSwimlane,
   Section,
   Skeleton,
   Text,
-  Link,
-  AddToCartButton,
 } from '~/components';
-import {getExcerpt} from '~/lib/utils';
-import invariant from 'tiny-invariant';
-import clsx from 'clsx';
-import type {
-  ProductVariant,
-  SelectedOptionInput,
-  Product as ProductType,
-  Shop,
-  ProductConnection,
-  MediaConnection,
-  MediaImage,
-} from '@shopify/hydrogen/storefront-api-types';
+import {ProductOptionSelect} from '~/components/ProductOptionSelect';
+import ProductOptionsPills from '~/components/ProductOptionsPills';
 import {MEDIA_FRAGMENT, PRODUCT_CARD_FRAGMENT} from '~/data/fragments';
+import {useCreateOptions} from '~/hooks/useCreateOptions.hook';
 import type {Storefront} from '~/lib/type';
-import type {Product} from 'schema-dts';
+import {getExcerpt} from '~/lib/utils';
+import {IOption, IVariants} from '~/types/types';
 
 const seo: SeoHandleFunction<typeof loader> = ({data}) => {
   const media = flattenConnection<MediaConnection>(data.product.media).find(
@@ -95,10 +94,10 @@ export async function loader({params, request, context}: LoaderArgs) {
   if (!product?.id) {
     throw new Response(null, {status: 404});
   }
-  console.log('meta', product);
 
   const recommended = getRecommendedProducts(context.storefront, product.id);
   const firstVariant = product.variants.nodes[0];
+
   const selectedVariant = product.selectedVariant ?? firstVariant;
 
   const productAnalytics: ShopifyAnalyticsProduct = {
@@ -125,7 +124,7 @@ export async function loader({params, request, context}: LoaderArgs) {
 
 export default function Product() {
   const {product, shop, recommended} = useLoaderData<typeof loader>();
-  const {media, title, vendor, descriptionHtml, metafields} = product;
+  const {media, title, options, descriptionHtml, variants} = product;
   const {shippingPolicy, refundPolicy} = shop;
 
   const firstVariant = product.variants.nodes[0];
@@ -134,17 +133,17 @@ export default function Product() {
     selectedVariant?.price?.amount &&
     selectedVariant?.compareAtPrice?.amount &&
     selectedVariant?.price?.amount < selectedVariant?.compareAtPrice?.amount;
-  const metafield = product.metafield;
-  if (product) {
-    console.log('meta', product);
-  }
+
+  console.log(variants.nodes);
+
+  const {uniqueOptions} = useCreateOptions(variants.nodes);
 
   return (
     <>
       <Section padding="x" className="px-0">
-        <div className="grid items-start md:gap-6 lg:gap-20 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid items-start md:gap-6 lg:gap-20 md:grid-cols-2 ">
           <ProductGallery
-            media={media.nodes}
+            media={uniqueOptions}
             className="w-screen md:w-full lg:col-span-2"
           />
           <div className="sticky md:-mb-nav md:top-nav md:-translate-y-nav md:h-screen md:pt-nav hiddenScroll md:overflow-y-scroll">
@@ -169,7 +168,7 @@ export default function Product() {
                   )}
                 </Text>
               </div>
-              <ProductForm />
+              <ProductForm variants={uniqueOptions} />
               <div className="grid gap-4 py-4">
                 {descriptionHtml && (
                   <ProductDetail
@@ -210,7 +209,7 @@ export default function Product() {
   );
 }
 
-export function ProductForm() {
+export function ProductForm({variants}: IVariants) {
   const {product, analytics} = useLoaderData<typeof loader>();
 
   const [currentSearchParams] = useSearchParams();
@@ -244,17 +243,35 @@ export function ProductForm() {
     quantity: 1,
   };
 
-  console.log('meta', product);
-
   return (
-    <div className="grid gap-10">
-      <div className="grid gap-4">
-        <ProductOptions
-          options={product.options}
-          searchParamsWithDefaults={searchParamsWithDefaults}
-        />
+    <div className="grid">
+      <ProductOptionsPills
+        variants={variants}
+        searchParamsWithDefaults={searchParamsWithDefaults}
+      />
+      <div className="grid gap-4 items-end">
         {selectedVariant && (
-          <div className="grid items-stretch gap-4">
+          <div className="flex items-end">
+            {product.options
+              .filter((option) => option.values.length > 1)
+              .map((option) => (
+                <div
+                  key={option.name}
+                  className="flex flex-col flex-wrap  gap-y-2 "
+                >
+                  {option.name === 'Size' && (
+                    <div className="flex flex-wrap items-baseline gap-4 mr-4">
+                      <Heading as="legend" size="lead" className="min-w-[4rem]">
+                        {option.name}
+                      </Heading>
+                      <ProductOptionSelect
+                        option={option}
+                        searchParamsWithDefaults={searchParamsWithDefaults}
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
             <AddToCartButton
               lines={[
                 {
@@ -287,175 +304,6 @@ export function ProductForm() {
   );
 }
 
-function ProductOptions({
-  options,
-  searchParamsWithDefaults,
-}: {
-  options: ProductType['options'];
-  searchParamsWithDefaults: URLSearchParams;
-}) {
-  const closeRef = useRef<HTMLButtonElement>(null);
-  return (
-    <>
-      {options
-        .filter((option) => option.values.length > 1)
-        .map((option) => (
-          <div
-            key={option.name}
-            className="flex flex-col flex-wrap mb-4 gap-y-2 last:mb-0"
-          >
-            <Heading as="legend" size="lead" className="min-w-[4rem]">
-              {option.name}
-            </Heading>
-            <div className="flex flex-wrap items-baseline gap-4">
-              {option.name === 'Color' ? (
-                <>
-                  {option.values.map((value) => {
-                    const checked =
-                      searchParamsWithDefaults.get(option.name) === value;
-                    const id = `option-${option.name}-${value}`;
-
-                    return (
-                      // <Text key={id}>
-                      //   <ProductOptionLink
-                      //     optionName={option.name}
-                      //     optionValue={value}
-                      //     searchParams={searchParamsWithDefaults}
-                      //     className={clsx(
-                      //       'leading-none py-1 border-b-[1.5px] cursor-pointer transition-all duration-200',
-                      //       checked ? 'border-primary/50' : 'border-primary/0',
-                      //     )}
-                      //   />
-                      // </Text>
-                      <div
-                        key={id}
-                        className={clsx(
-                          'flex items-center justify-center rounded-full h-8 w-8 py-1 border-[1.5px] cursor-pointer transition-all duration-200',
-                          checked ? 'border-white' : 'border-primary/0',
-                        )}
-                      >
-                        <ProductOptionLink
-                          optionName={option.name}
-                          optionValue={value}
-                          searchParams={searchParamsWithDefaults}
-                        >
-                          <div
-                            className="rounded-full h-6 w-6"
-                            style={{backgroundColor: value}}
-                          >
-                            <span className="sr-only">{value}</span>
-                          </div>
-                        </ProductOptionLink>
-                      </div>
-                    );
-                  })}
-                </>
-              ) : (
-                <div className="relative w-full">
-                  <Listbox>
-                    {({open}) => (
-                      <>
-                        <Listbox.Button
-                          ref={closeRef}
-                          className={clsx(
-                            'flex items-center justify-between w-full py-3 px-4 border border-primary',
-                            open
-                              ? 'rounded-b md:rounded-t md:rounded-b-none'
-                              : 'rounded',
-                          )}
-                        >
-                          <span>
-                            {searchParamsWithDefaults.get(option.name)}
-                          </span>
-                          <IconCaret direction={open ? 'up' : 'down'} />
-                        </Listbox.Button>
-                        <Listbox.Options
-                          className={clsx(
-                            'border-primary bg-contrast absolute bottom-12 z-30 grid h-48 w-full overflow-y-scroll rounded-t border px-2 py-2 transition-[max-height] duration-150 sm:bottom-auto md:rounded-b md:rounded-t-none md:border-t-0 md:border-b',
-                            open ? 'max-h-48' : 'max-h-0',
-                          )}
-                        >
-                          {option.values.map((value) => (
-                            <Listbox.Option
-                              key={`option-${option.name}-${value}`}
-                              value={value}
-                            >
-                              {({active}) => (
-                                <ProductOptionLink
-                                  optionName={option.name}
-                                  optionValue={value}
-                                  className={clsx(
-                                    'text-primary w-full p-2 transition rounded flex justify-start items-center text-left cursor-pointer',
-                                    active && 'bg-primary/10',
-                                  )}
-                                  searchParams={searchParamsWithDefaults}
-                                  onClick={() => {
-                                    if (!closeRef?.current) return;
-                                    closeRef.current.click();
-                                  }}
-                                >
-                                  {value}
-                                  {searchParamsWithDefaults.get(option.name) ===
-                                    value && (
-                                    <span className="ml-2">
-                                      <IconCheck />
-                                    </span>
-                                  )}
-                                </ProductOptionLink>
-                              )}
-                            </Listbox.Option>
-                          ))}
-                        </Listbox.Options>
-                      </>
-                    )}
-                  </Listbox>
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
-    </>
-  );
-}
-
-function ProductOptionLink({
-  optionName,
-  optionValue,
-  searchParams,
-  children,
-  ...props
-}: {
-  optionName: string;
-  optionValue: string;
-  searchParams: URLSearchParams;
-  children?: ReactNode;
-  [key: string]: any;
-}) {
-  const {pathname} = useLocation();
-  const isLangPathname = /\/[a-zA-Z]{2}-[a-zA-Z]{2}\//g.test(pathname);
-  // fixes internalized pathname
-  const path = isLangPathname
-    ? `/${pathname.split('/').slice(2).join('/')}`
-    : pathname;
-
-  const clonedSearchParams = new URLSearchParams(searchParams);
-  clonedSearchParams.set(optionName, optionValue);
-
-  return (
-    <div>
-      <Link
-        {...props}
-        preventScrollReset
-        prefetch="intent"
-        replace
-        to={`${path}?${clonedSearchParams.toString()}`}
-      >
-        {children ?? optionValue}
-      </Link>
-    </div>
-  );
-}
-
 function ProductDetail({
   title,
   content,
@@ -470,19 +318,18 @@ function ProductDetail({
       {({open}) => (
         <>
           <Disclosure.Button className="text-left">
-            <div className="flex justify-between">
+            <div className="flex justify-between ">
               <Text size="lead" as="h4">
                 {title}
               </Text>
               <IconClose
                 className={clsx(
-                  'transition-transform transform-gpu duration-200',
+                  'transition-transform transform-gpu duration-400',
                   !open && 'rotate-[45deg]',
                 )}
               />
             </div>
           </Disclosure.Button>
-
           <Disclosure.Panel className={'pb-4 pt-2 grid gap-2'}>
             <div
               className="prose dark:prose-invert"
@@ -569,7 +416,7 @@ const PRODUCT_QUERY = `#graphql
           ...Media
         }
       }
-      variants(first: 1) {
+      variants(first: 100) {
         nodes {
           ...ProductVariantFragment
         }
@@ -579,6 +426,7 @@ const PRODUCT_QUERY = `#graphql
         title
       }
     }
+    
     shop {
       name
       shippingPolicy {
